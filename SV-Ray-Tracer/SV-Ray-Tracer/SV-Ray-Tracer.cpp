@@ -8,14 +8,33 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "Utils/General/stb_image_write.h"
 #include "Objects/Sphere.h"
+#include "Utils/Camera.h"
 
-color ray_color(const ray& r, const Intersectable& world)
+//Options
+const bool antialiasing = true;
+
+int max_ray_depth = 50;
+
+//Image
+const float aspect_ratio = 16.0 / 9.0;
+const int image_width = 400;
+const int image_height = (int)(image_width / aspect_ratio);
+const int channels = 3;
+const int samples_per_pixel = 5;
+
+color ray_color(const ray& r, const Intersectable& world, int depth)
 {
+	if (depth <= 0)
+	{
+		return color(0.0, 0.0, 0.0);
+	}
+
 	//Intersection Normal Gradient
 	Intersection intersect;
-	if (world.hit(r, 0, infinity, intersect))
+	if (world.hit(r, 0.001, infinity, intersect))
 	{
-		return 0.5 * (intersect.normal + color(1, 1, 1));
+		point target = intersect.p + intersect.normal + random_unit_vector();
+		return 0.5 * ray_color(ray(intersect.p, target - intersect.p), world, depth - 1);
 	}
 	
 	//Background
@@ -24,48 +43,62 @@ color ray_color(const ray& r, const Intersectable& world)
 	return (1 - t) * color(1.0, 1.0, 1.0) + t * color(0.5, 0.7, 1.0);
 }
 
+void write_color(unsigned char *& data, int i, int j, color pixel_col, int samples_per_pixel)
+{
+	float r = pixel_col.x();
+	float g = pixel_col.y();
+	float b = pixel_col.z();
+
+	float scale = 1.0 / samples_per_pixel;
+
+	r = sqrt(scale * r);
+	g = sqrt(scale * g);
+	b = sqrt(scale * b);
+
+	data[((image_height - 1 - j) * image_width * channels) + channels * i] = 256 * clamp(r, 0.0, 0.999);
+	data[((image_height - 1 - j) * image_width * channels) + channels * i + 1] = 256 * clamp(g, 0.0, 0.999);
+	data[((image_height - 1 - j) * image_width * channels) + channels * i + 2] = 256 * clamp(b, 0.0, 0.999);
+}
+
 int main()
 {
-	//Image
-	const float aspect_ratio = 16.0 / 9.0;
-	const int image_width = 400;
-	const int image_height = (int)(image_width / aspect_ratio);
-	const int channels = 3;
-
 	//World
 	IntersectableList world;
 	world.add(make_shared<Sphere>(point(0.0, 0.0, -1.0), 0.5));
 	world.add(make_shared<Sphere>(point(0.0, -100.5, -1.0), 100.0));
 
-	//Camera	
-	float viewport_height = 2.0;
-	float viewport_width = aspect_ratio * viewport_height;
-	float focal_length = 1.0;
-
-	point origin = point(0.0, 0.0, 0.0);
-	vec3 horizontal = vec3(viewport_width, 0.0, 0.0);
-	vec3 vertical = vec3(0.0, viewport_height, 0.0);
-	vec3 lower_left_corner = origin - horizontal / 2 - vertical / 2 - vec3(0.0, 0.0, focal_length);
+	//Camera
+	Camera camera;
 
 	unsigned char* data = new unsigned char[image_height * image_width * channels];
 	for (int j = image_height - 1; j >= 0; j--)
 	{
 		for (int i = 0; i < image_width; i++)
 		{
-			float u = float(i) / (image_width - 1);
-			float v = float(j) / (image_height - 1);
+			color pixel_col(0.0, 0.0, 0.0);
+			if (antialiasing)
+			{
+				for (int s = 0; s < samples_per_pixel; s++)
+				{
+					float u = (i + rand_float()) / (image_width - 1);
+					float v = (j + rand_float()) / (image_height - 1);
 
-			ray r(origin, lower_left_corner + u * horizontal + v * vertical - origin);
+					ray r = camera.getRay(u, v);
 
-			color c = ray_color(r, world);
+					pixel_col += ray_color(r, world, max_ray_depth);
+				}
+				write_color(data, i, j, pixel_col, samples_per_pixel);
+			}
+			else
+			{
+				float u = float(i) / (image_width - 1);
+				float v = float(j) / (image_height - 1);
 
-			int ir = (int)(255.999 * c.x());
-			int ig = (int)(255.999 * c.y());
-			int ib = (int)(255.999 * c.z());
+				ray r = camera.getRay(u, v);
 
-			data[((image_height - 1 - j) * image_width * channels) + channels * i] = ir;
-			data[((image_height - 1 - j) * image_width * channels) + channels * i + 1] = ig;
-			data[((image_height - 1 - j) * image_width * channels) + channels * i + 2] = ib;
+				pixel_col = ray_color(r, world, max_ray_depth);
+				write_color(data, i, j, pixel_col, 1);
+			}
 		}
 	}
 

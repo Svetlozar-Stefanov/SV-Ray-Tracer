@@ -42,6 +42,14 @@ public:
 
     float sqrd_len() const { return e[0] * e[0] + e[1] * e[1] + e[2] * e[2]; }
 
+    inline static vec3 random() {
+        return vec3(rand_float(), rand_float(), rand_float());
+    }
+
+    inline static vec3 random(float min, float max) {
+        return vec3(rand_float(min, max), rand_float(min, max), rand_float(min, max));
+    }
+
 public:
 	float e[3];
 };
@@ -89,6 +97,23 @@ inline vec3 cross(const vec3& v1, const vec3& v2) {
 inline vec3 unit_vector(vec3 v) {
     return v / v.length();
 }
+
+vec3 random_in_unit_sphere() {
+    while (true)
+    {
+        vec3 p = vec3::random(-1, 1);
+        if (p.sqrd_len() >= 1)
+        {
+            continue;
+        }
+        return p;
+    }
+}
+
+vec3 random_unit_vector() {
+    return unit_vector(random_in_unit_sphere());
+}
+
 
 using point = vec3;
 using color = vec3;
