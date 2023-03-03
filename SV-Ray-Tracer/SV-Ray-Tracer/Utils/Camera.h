@@ -5,20 +5,34 @@
 class Camera
 {
 public:
-	Camera() {
-		float aspect_ratio = 16.0 / 9.0;
-		float viewport_height = 2.0;
+	Camera(point lookfrom, point lookat, vec3 vup, 
+		float fov, float aspect_ratio,
+		float apeture, float focus_dist) {
+		float theta = degrees_to_radians(fov);
+		float h = tan(theta / 2);
+		float viewport_height = 2.0 * h;
 		float viewport_width = aspect_ratio * viewport_height;
 		float focal_length = 1.0;
 
-		origin = point(0.0, 0.0, 0.0);
-		horizontal = vec3(viewport_width, 0.0, 0.0);
-		vertical = vec3(0.0, viewport_height, 0.0);
-		lower_left_corner = origin - horizontal / 2 - vertical / 2 - vec3(0.0, 0.0, focal_length);
+		w = unit_vector(lookfrom - lookat);
+		u = unit_vector(cross(vup, w));
+		v = cross(w, u);
+
+
+
+		origin = lookfrom;
+		horizontal = focus_dist * viewport_width * u;
+		vertical = focus_dist * viewport_height * v;
+		lower_left_corner = origin - horizontal / 2 - vertical / 2 - focus_dist*w;
+
+		lens_radius = apeture / 2;
 	}
 
-	ray getRay(double u, double v) const {
-		return ray(origin, lower_left_corner + horizontal * u + vertical * v - origin);
+	ray getRay(float s, float t) const {
+		vec3 rd = lens_radius * random_in_unit_disk();
+		vec3 offset = u * rd.x() + v * rd.y();
+
+		return ray(origin + offset, lower_left_corner + horizontal * s + vertical * t - origin - offset);
 	}
 
 private:
@@ -26,4 +40,6 @@ private:
 	vec3 horizontal;
 	vec3 vertical;
 	vec3 lower_left_corner;
+	vec3 w, u, v;
+	float lens_radius;
 };

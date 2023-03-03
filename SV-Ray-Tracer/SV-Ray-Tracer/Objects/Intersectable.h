@@ -1,11 +1,14 @@
 #pragma once
-#include "../Utils/Math/vec3.h"
-#include "../Utils/Math/ray.h"
+#include "..\Utils\SV-Ray-Tracer.h"
+#include "..\Materials\Material.h"
+
+class Material;
 
 struct Intersection
 {
 	point p;
 	vec3 normal;
+	shared_ptr<Material> material;
 	float t;
 
 	bool front_face;

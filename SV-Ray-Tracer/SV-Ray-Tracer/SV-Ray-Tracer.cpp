@@ -1,14 +1,15 @@
+#include <iostream>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "Utils/General/stb_image_write.h"
+
 #include "Utils/SV-Ray-Tracer.h"
 #include "Objects/Intersectable.h"
 #include "Objects/IntersectableList.h"
-
-#include <iostream>
-
-
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "Utils/General/stb_image_write.h"
 #include "Objects/Sphere.h"
 #include "Utils/Camera.h"
+#include "Materials/Lambertian.h"
+#include "Materials/Metal.h"
+#include "Materials/Dielectric.h"
 
 //Options
 const bool antialiasing = true;
@@ -16,7 +17,7 @@ const bool antialiasing = true;
 int max_ray_depth = 50;
 
 //Image
-const float aspect_ratio = 16.0 / 9.0;
+const float aspect_ratio = 3.0 / 2.0;
 const int image_width = 400;
 const int image_height = (int)(image_width / aspect_ratio);
 const int channels = 3;
@@ -29,12 +30,17 @@ color ray_color(const ray& r, const Intersectable& world, int depth)
 		return color(0.0, 0.0, 0.0);
 	}
 
-	//Intersection Normal Gradient
+	
 	Intersection intersect;
 	if (world.hit(r, 0.001, infinity, intersect))
 	{
-		point target = intersect.p + intersect.normal + random_unit_vector();
-		return 0.5 * ray_color(ray(intersect.p, target - intersect.p), world, depth - 1);
+		ray scattered;
+		color attenuation;
+		if (intersect.material->scatter(r, intersect, attenuation, scattered))
+		{
+			return attenuation * ray_color(scattered, world, depth - 1);
+		}
+		return color(0.0, 0.0, 0.0);
 	}
 	
 	//Background
@@ -60,15 +66,67 @@ void write_color(unsigned char *& data, int i, int j, color pixel_col, int sampl
 	data[((image_height - 1 - j) * image_width * channels) + channels * i + 2] = 256 * clamp(b, 0.0, 0.999);
 }
 
+IntersectableList random_scene() {
+	IntersectableList world;
+
+	auto ground_material = make_shared<Lambertian>(color(0.5, 0.5, 0.5));
+	world.add(make_shared<Sphere>(point(0, -1000, 0), 1000, ground_material));
+
+	for (int a = -11; a < 11; a++) {
+		for (int b = -11; b < 11; b++) {
+			auto choose_mat = rand_float();
+			point center(a + 0.9 * rand_float(), 0.2, b + 0.9 * rand_float());
+
+			if ((center - point(4, 0.2, 0)).length() > 0.9) {
+				shared_ptr<Material> sphere_material;
+
+				if (choose_mat < 0.8) {
+					// diffuse
+					auto albedo = color::random() * color::random();
+					sphere_material = make_shared<Lambertian>(albedo);
+					world.add(make_shared<Sphere>(center, 0.2, sphere_material));
+				}
+				else if (choose_mat < 0.95) {
+					// metal
+					auto albedo = color::random(0.5, 1);
+					auto fuzz = rand_float(0, 0.5);
+					sphere_material = make_shared<Metal>(albedo, fuzz);
+					world.add(make_shared<Sphere>(center, 0.2, sphere_material));
+				}
+				else {
+					// glass
+					sphere_material = make_shared<Dielectric>(1.5);
+					world.add(make_shared<Sphere>(center, 0.2, sphere_material));
+				}
+			}
+		}
+	}
+
+	auto material1 = make_shared<Dielectric>(1.5);
+	world.add(make_shared<Sphere>(point(0, 1, 0), 1.0, material1));
+
+	auto material2 = make_shared<Lambertian>(color(0.4, 0.2, 0.1));
+	world.add(make_shared<Sphere>(point(-4, 1, 0), 1.0, material2));
+
+	auto material3 = make_shared<Metal>(color(0.7, 0.6, 0.5), 0.0);
+	world.add(make_shared<Sphere>(point(4, 1, 0), 1.0, material3));
+
+	return world;
+}
+
 int main()
 {
 	//World
-	IntersectableList world;
-	world.add(make_shared<Sphere>(point(0.0, 0.0, -1.0), 0.5));
-	world.add(make_shared<Sphere>(point(0.0, -100.5, -1.0), 100.0));
+	IntersectableList world = random_scene();
 
 	//Camera
-	Camera camera;
+	point lookfrom(13, 3, 2);
+	point lookat(0, 0, 0);
+	vec3 vup(0, 1, 0);
+	auto dist_to_focus = 10;
+	auto aperture = 0.1;
+
+	Camera camera(lookfrom, lookat, vup, 90, aspect_ratio, aperture, dist_to_focus);
 
 	unsigned char* data = new unsigned char[image_height * image_width * channels];
 	for (int j = image_height - 1; j >= 0; j--)

@@ -5,10 +5,12 @@ class Sphere : public Intersectable
 {
 public:
 	Sphere() : c(0.0, 0.0, 0.0), r(1.0) { }
-	Sphere(point center, float radius) : c(center), r(radius) { }
+	Sphere(point center, float radius, shared_ptr<Material> material) 
+		: c(center), r(radius), mat(material) { }
 
 	point center() const { return c; }
 	float radius() const { return r; }
+	shared_ptr<Material> material() const { return mat; }
 
 	bool hit(const ray& r, float tMin, float tMax, Intersection& intersection) const override
 	{
@@ -39,10 +41,15 @@ public:
 		intersection.p = r.at(t);
 		vec3 outward_normal = (r.at(t) - center()) / radius();
 		intersection.set_face_normal(r, outward_normal);
+
+		intersection.material = material();
+
 		return true;
 	}
 
 private:
 	point c;
 	float r;
+
+	shared_ptr<Material> mat;
 };

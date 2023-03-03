@@ -50,6 +50,11 @@ public:
         return vec3(rand_float(min, max), rand_float(min, max), rand_float(min, max));
     }
 
+    bool near_zero() const {
+        const auto s = 1e-8;
+        return fabs(e[0] < s) && fabs(e[1] < s) && fabs(e[2] < s);
+    }
+
 public:
 	float e[3];
 };
@@ -114,6 +119,30 @@ vec3 random_unit_vector() {
     return unit_vector(random_in_unit_sphere());
 }
 
+vec3 random_in_unit_disk() {
+    while (true)
+    {
+        auto p = vec3(rand_float(-1, 1), rand_float(-1, 1), 0);
+        if (p.sqrd_len() >= 1)
+        {
+            continue;
+        }
+        return p;
+    }
+}
+
+vec3 reflect(const vec3& v, const vec3& n)
+{
+    return v - 2 * dot(v, n) * n;
+}
+
+vec3 refract(const vec3& uv, const vec3& n, float etai_over_etat)
+{
+    auto cos_theta = fmin(dot(-uv, n), 1.0);
+    vec3 r_perp = etai_over_etat * (uv + cos_theta * n);
+    vec3 r_parallel = -sqrt(fabs(1.0 - r_perp.sqrd_len()))* n;
+    return r_perp + r_parallel;
+}
 
 using point = vec3;
 using color = vec3;
